@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn import Module, ModuleList, Linear
 from einops import repeat, rearrange, pack, unpack
 from einops.layers.torch import Rearrange
-
+from rotary_embedding_torch import RotaryEmbedding
 LinearNoBias = partial(Linear, bias = False)
 
 
@@ -65,14 +65,16 @@ class GEGLU(Module):
         return F.silu(gate) * x
 
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64):
+    def __init__(self, dim, heads = 8, dim_head = 64, is_causal = True):
         super().__init__()
         inner_dim = dim_head *  heads
         self.heads = heads
         self.scale = dim_head ** -0.5
         self.norm = nn.LayerNorm(dim)
-
+        self.rotary_emb = RotaryEmbedding(dim_head)
         self.attend = nn.Softmax(dim = -1)
+
+        self.is_causal = is_causal
 
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
         self.to_out = nn.Linear(inner_dim, dim, bias = False)
@@ -83,16 +85,24 @@ class Attention(nn.Module):
         qkv = self.to_qkv(x).chunk(3, dim = -1)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
 
+        # caching
         if exists(cache):
             past_k, past_v = cache
             k = torch.cat((past_k, k), dim = -2)
             v = torch.cat((past_v, v), dim = -2)
 
-        seq_len = q.shape[-2]
-        causal_mask = torch.triu(torch.ones((seq_len, seq_len), device=x.device), diagonal=1).bool()
+        # relative positions
+        q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)
 
+        # causal mask
+        if self.is_causal:
+            seq_len = q.shape[-2]
+            causal_mask = torch.triu(torch.ones((seq_len, seq_len), device=x.device), diagonal=1).bool()
+
+        # attention
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
-        dots.masked_fill_(causal_mask, float('-inf'))
+        if self.is_causal:
+            dots.masked_fill_(causal_mask, float('-inf'))
 
         attn = self.attend(dots)
 
