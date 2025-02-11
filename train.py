@@ -33,6 +33,21 @@ SHOULD_GENERATE = True
 USE_FAST_INFERENCE = True
 SEQ_LEN = 512
 
+# experiment related
+
+PROJECT_NAME = 'transformer'
+RUN_NAME = f'vanilla_transformer'
+WANDB_ONLINE = True # turn this on to pipe experiment to cloud
+
+# wandb experiment tracker
+
+import wandb
+wandb.init(project = PROJECT_NAME, mode = 'disabled' if not WANDB_ONLINE else 'online')
+wandb.run.name = RUN_NAME
+wandb.run.save()
+
+
+
 # helpers
 def cycle(loader):
     while True:
@@ -100,13 +115,14 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval = 10., desc = 'training'):
     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
     optim.step()
     optim.zero_grad()
-
+    wandb.log(dict(loss = loss.item()))
+    
     if i % VALIDATE_EVERY == 0:
         model.eval()
         with torch.no_grad():
             loss = model(next(val_loader), return_loss = True)
             print(f'validation loss: {loss.item()}')
-
+            wandb.log(dict(val_loss = loss.item()), step = i)
     if SHOULD_GENERATE and i % GENERATE_EVERY == 0:
         model.eval()
         inp = random.choice(val_dataset)[:PRIME_LENGTH]

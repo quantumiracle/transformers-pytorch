@@ -171,7 +171,7 @@ class InfiniAttention(nn.Module):
         heads = 8, 
         dim_head = 64, 
         is_causal = True, 
-        bptt = False, 
+        bptt = True, 
         delta_update = True,
         segment_len = 32,
     ):
@@ -228,6 +228,9 @@ class InfiniAttention(nn.Module):
             mem, z = memory_cache
 
         outputs = []
+        # it's a loop version of infinite attention, cannot parallelize due to memory sequence nature
+        # https://github.com/vmarinowski/infini-attention/blob/main/infini_attention/infini_attention.py
+        # other code may parallel with segment: https://github.com/Beomi/InfiniTransformer/blob/045f4eba17a3155dbdc255d76b4623bebc768eb6/infini_llama/modeling_infini_llama.py#L975
         for i in range(k.shape[0]):
             q_slice = q[i]
             k_slice = k[i]
