@@ -15,6 +15,7 @@ from torch.nn import Module, ModuleList, Linear
 from einops import repeat, rearrange, pack, unpack
 from einops.layers.torch import Rearrange
 from rotary_embedding_torch import RotaryEmbedding
+
 LinearNoBias = partial(Linear, bias = False)
 
 
@@ -91,6 +92,8 @@ class Attention(nn.Module):
             k = torch.cat((past_k, k), dim = -2)
             v = torch.cat((past_v, v), dim = -2)
 
+        new_cache = (k, v)
+        
         # relative positions
         q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)
 
@@ -109,10 +112,7 @@ class Attention(nn.Module):
         out = torch.matmul(attn, v)
         out = rearrange(out, 'b h n d -> b n (h d)')
         
-        new_cache = torch.stack((k, v))
-
         return self.to_out(out), new_cache
-
 
 class Transformer(Module):
     def __init__(
@@ -222,7 +222,7 @@ class Transformer(Module):
         x = self.norm(x)
         logits = self.to_logits(x)
 
-        next_cache = torch.stack(next_cache) if return_cache else None
+        next_cache = next_cache if return_cache else None
 
         if not return_loss:
             if not return_cache:
