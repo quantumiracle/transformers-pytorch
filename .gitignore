@@ -1,2 +1,6 @@
 wandb/
 *.log
+data/MNIST/
+data/diffusion_outputs1000/
+*.png
+*.gif
