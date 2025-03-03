@@ -265,5 +265,5 @@ def dit_mnist(input_h=28, input_w=28, in_channels=1, patch_size=1, external_cond
         hidden_size=256,
         depth=6,
         num_heads=16,
-        external_cond_dim=1,
+        external_cond_dim=external_cond_dim,
     )

@@ -47,7 +47,7 @@ def train_mnist():
     input_w = 28
     input_c = 1
     patch_size = 1  # critical: MNIST is 28x28, needs patch size 1; 2 does not work well
-    USE_ONE_HOT_CLASS = False
+    USE_ONE_HOT_CLASS = True
     if USE_ONE_HOT_CLASS:
         external_cond_dim = 10 # MINIST has 10 classes
     else:
@@ -82,9 +82,11 @@ def train_mnist():
             x = x.to(device)
             c = c.to(device)
             # one-hot encoding
-            one_hot_c = torch.zeros(c.size(0), n_classes).to(device)
-            one_hot_c.scatter_(1, c.unsqueeze(1), 1)
-            one_hot_c = c.unsqueeze(1)
+            if USE_ONE_HOT_CLASS:
+                one_hot_c = torch.zeros(c.size(0), n_classes).to(device)
+                one_hot_c.scatter_(1, c.unsqueeze(1), 1)
+            else:
+                one_hot_c = c.unsqueeze(1)
             loss = ddpm(x, one_hot_c)  # c: (B, 1))
             loss.backward()
             if loss_ema is None:
@@ -102,10 +104,11 @@ def train_mnist():
             for w_i, w in enumerate(ws_test):
                 # get condition
                 int_c_i = torch.arange(0,10).to(device) # context for us just cycles throught the mnist labels
-                # one-hot encoding
-                c_i = torch.zeros(int_c_i.shape[0], 10).to(device)
-                c_i.scatter_(1, int_c_i.unsqueeze(1), 1)
-                c_i = int_c_i.unsqueeze(1)
+                if USE_ONE_HOT_CLASS:
+                    c_i = torch.zeros(int_c_i.shape[0], 10).to(device)
+                    c_i.scatter_(1, int_c_i.unsqueeze(1), 1)
+                else:
+                    c_i = int_c_i.unsqueeze(1)
                 c_i = c_i.repeat(int(n_sample/c_i.shape[0]),1)
                 # c_i = c_i.repeat(int(n_sample/c_i.shape[0])).unsqueeze(1) # non-one-hot encoding
                 x_gen, x_gen_store = ddpm.sample(n_sample, (input_c, input_h, input_w), device, guide_w=w, cond=c_i)
