@@ -256,14 +256,14 @@ def dit_small():
     )
 
 
-def dit_mnist(input_h=28, input_w=28, in_channels=1):
+def dit_mnist(input_h=28, input_w=28, in_channels=1, patch_size=1, external_cond_dim=1):
     return DiT(
         input_h=input_h,
         input_w=input_w,
         in_channels=in_channels,
-        patch_size=1,
+        patch_size=patch_size,
         hidden_size=256,
         depth=6,
         num_heads=16,
-        external_cond_dim=10,
+        external_cond_dim=1,
     )

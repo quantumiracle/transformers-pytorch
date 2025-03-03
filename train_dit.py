@@ -20,6 +20,9 @@ PROJECT_NAME = 'diffusion_transformer'
 RUN_NAME = f'dit_mnist'
 WANDB_ONLINE = True # turn this on to pipe experiment to cloud
 
+# export cuda device
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 # wandb experiment tracker
 
 import wandb
@@ -43,10 +46,16 @@ def train_mnist():
     input_h = 28
     input_w = 28
     input_c = 1
+    patch_size = 1  # critical: MNIST is 28x28, needs patch size 1; 2 does not work well
+    USE_ONE_HOT_CLASS = False
+    if USE_ONE_HOT_CLASS:
+        external_cond_dim = 10 # MINIST has 10 classes
+    else:
+        external_cond_dim = 1
     os.makedirs(save_dir, exist_ok=True)
 
     # load model
-    model = dit_mnist(input_h=input_h, input_w=input_w, in_channels=input_c)
+    model = dit_mnist(input_h=input_h, input_w=input_w, in_channels=input_c, patch_size=patch_size, external_cond_dim=external_cond_dim)
     ddpm = DDPM(model, betas=(1e-4, 0.02), n_T=n_T, device=device, drop_prob=0.1)
     ddpm.to(device)
 
@@ -75,6 +84,7 @@ def train_mnist():
             # one-hot encoding
             one_hot_c = torch.zeros(c.size(0), n_classes).to(device)
             one_hot_c.scatter_(1, c.unsqueeze(1), 1)
+            one_hot_c = c.unsqueeze(1)
             loss = ddpm(x, one_hot_c)  # c: (B, 1))
             loss.backward()
             if loss_ema is None:
@@ -95,6 +105,7 @@ def train_mnist():
                 # one-hot encoding
                 c_i = torch.zeros(int_c_i.shape[0], 10).to(device)
                 c_i.scatter_(1, int_c_i.unsqueeze(1), 1)
+                c_i = int_c_i.unsqueeze(1)
                 c_i = c_i.repeat(int(n_sample/c_i.shape[0]),1)
                 # c_i = c_i.repeat(int(n_sample/c_i.shape[0])).unsqueeze(1) # non-one-hot encoding
                 x_gen, x_gen_store = ddpm.sample(n_sample, (input_c, input_h, input_w), device, guide_w=w, cond=c_i)
