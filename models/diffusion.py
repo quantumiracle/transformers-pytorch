@@ -32,6 +32,10 @@ def ddpm_schedules(beta1, beta2, T):
         "mab_over_sqrtmab": mab_over_sqrtmab_inv,  # (1-\alpha_t)/\sqrt{1-\bar{\alpha_t}}
     }
 
+def extract(a, t, x_shape):
+    f, b = t.shape
+    out = a[t]
+    return out.reshape(f, b, *((1,) * (len(x_shape) - 2)))
 
 class DDPM(nn.Module):
     def __init__(self, model, betas, n_T, device, drop_prob=0.1):
@@ -52,13 +56,17 @@ class DDPM(nn.Module):
         """
         this method is used in training, so samples t and noise randomly
         """
-
-        _ts = torch.randint(1, self.n_T+1, (x.shape[0],)).to(self.device)  # t ~ Uniform(0, n_T)
+        if x.ndim == 4: # (B, C, H, W)
+            _ts = torch.randint(1, self.n_T+1, (x.shape[0],)).to(self.device)  # t ~ Uniform(0, n_T)
+        elif x.ndim == 5: # (B, T, C, H, W)
+            _ts = torch.randint(1, self.n_T+1, (x.shape[0], x.shape[1])).to(self.device)  # t ~ Uniform(0, n_T)
+        else:
+            raise ValueError(f"x.ndim must be 4 or 5, but got {x.ndim}")
         noise = torch.randn_like(x)  # eps ~ N(0, 1)
 
         x_t = (
-            self.sqrtab[_ts, None, None, None] * x
-            + self.sqrtmab[_ts, None, None, None] * noise
+            extract(self.sqrtab, _ts, x.shape) * x
+            + extract(self.sqrtmab, _ts, x.shape) * noise
         )  # This is the x_t, which is sqrt(alphabar) x_0 + sqrt(1-alphabar) * eps
         # We should predict the "error term" from this x_t. Loss is what we return.
 
@@ -77,6 +85,7 @@ class DDPM(nn.Module):
         # where w>0 means more guidance
 
         x_i = torch.randn(n_sample, *size).to(device)  # x_T ~ N(0, 1), sample initial noise
+        n_frames = x_i.shape[1]
 
         # don't drop context at test time
         context_mask = torch.ones_like(cond).to(device)
@@ -94,8 +103,16 @@ class DDPM(nn.Module):
             t_is = t_is.repeat(n_sample)
 
             # double batch
-            x_i = x_i.repeat(2,1,1,1)
-            t_is = t_is.repeat(2)
+            # adapt to x_i shape, 4d or 5d
+            # t_is is a tensor of shape (2B,T) if x_i is 5d, (2B,) if x_i is 4d
+            if x_i.ndim == 4:
+                x_i = x_i.repeat(2,1,1,1)
+                t_is = t_is.repeat(2)
+            elif x_i.ndim == 5:
+                x_i = x_i.repeat(2,1,1,1,1)
+                t_is = t_is.repeat(2).unsqueeze(1).repeat(1, n_frames)
+            else:
+                raise ValueError(f"x_i.ndim must be 4 or 5, but got {x_i.ndim}")
 
             z = torch.randn(n_sample, *size).to(device) if i > 1 else 0
 
