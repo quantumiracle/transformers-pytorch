@@ -1,7 +1,7 @@
 # Transformer and Diffusion Transformer
 
 ### Vanilla Transformer
-on Wikitext
+on enwik8
 ```
 python train.py
 ```
