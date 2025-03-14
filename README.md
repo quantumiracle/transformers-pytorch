@@ -9,6 +9,8 @@ Optionally, use Dynamic Tanh instead of RMSnorm or LayerNorm
 
 Ref: [Transformer without Normalization](https://arxiv.org/abs/2503.10622)
 
+Speed test: [Colab](https://colab.research.google.com/drive/1M_oksDjSleR0NDctWSPs5D6fQx6dkoaC?usp=sharing)
+
 ### Transformer with Infini-attention
 ```
 python train_infini.py
