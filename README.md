@@ -27,3 +27,7 @@ python train_dit.py
 ```
 python train_dit_3d.py
 ```
+
+
+## Result Analysis
+[See doc](https://docs.google.com/document/d/1orGvXJ3iO-yDa6Szqt3DEdthMRKloXFkyRdi3fPn630/edit?usp=sharing)
