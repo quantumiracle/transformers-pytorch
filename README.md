@@ -20,12 +20,13 @@ python train_infini.py
 ### 2D Diffusion Transformer
 on MNIST
 
-RoPE for spatial embedding
+RoPE for spatial embedding in 2D spatial attention
 ```
 python train_dit.py
 ```
 
 ### 3D Diffusion Transformer
+Sin-cos embedding before 3D attention
 ```
 python train_dit_3d.py
 ```
