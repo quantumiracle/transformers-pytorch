@@ -15,7 +15,7 @@ from models.transformer import (
     Transformer,
 )
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 # constants
 
@@ -32,6 +32,7 @@ GENERATE_LENGTH = 512
 SHOULD_GENERATE = True
 USE_FAST_INFERENCE = True
 SEQ_LEN = 512
+DYNAMIC_TANH = True
 
 # experiment related
 
@@ -69,6 +70,7 @@ model = Transformer(
     heads = 8,
     dim_head = 64,
     mlp_dim = 512,
+    dynamic_tanh = DYNAMIC_TANH,
     ).cuda()
 
 # prepare enwik8 data
@@ -111,11 +113,11 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval = 10., desc = 'training'):
         loss = model(next(train_loader), return_loss = True)
         loss.backward()
 
-    print(f'training loss: {loss.item()}')
+    # print(f'training loss: {loss.item()}')
     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
     optim.step()
     optim.zero_grad()
-    wandb.log(dict(loss = loss.item()))
+    wandb.log(dict(loss = loss.item()), step = i)
     
     if i % VALIDATE_EVERY == 0:
         model.eval()
