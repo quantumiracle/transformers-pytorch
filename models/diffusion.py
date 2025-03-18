@@ -57,13 +57,12 @@ class DDPM(nn.Module):
         this method is used in training, so samples t and noise randomly
         """
         if x.ndim == 4: # (B, C, H, W)
-            _ts = torch.randint(1, self.n_T+1, (x.shape[0],)).to(self.device)  # t ~ Uniform(0, n_T)
+            _ts = torch.randint(1, self.n_T+1, (x.shape[0], 1)).to(self.device)  # t ~ Uniform(0, n_T)
         elif x.ndim == 5: # (B, T, C, H, W)
             _ts = torch.randint(1, self.n_T+1, (x.shape[0], x.shape[1])).to(self.device)  # t ~ Uniform(0, n_T)
         else:
             raise ValueError(f"x.ndim must be 4 or 5, but got {x.ndim}")
         noise = torch.randn_like(x)  # eps ~ N(0, 1)
-
         x_t = (
             extract(self.sqrtab, _ts, x.shape) * x
             + extract(self.sqrtmab, _ts, x.shape) * noise
@@ -75,7 +74,7 @@ class DDPM(nn.Module):
         
         # return MSE between added noise, and our predicted noise
         # return self.loss_mse(noise, self.model(x_t, _ts / self.n_T, c, context_mask))
-        return self.loss_mse(noise, self.model(x_t, _ts, c, context_mask))
+        return self.loss_mse(noise, self.model(x_t, _ts.squeeze(-1), c, context_mask))
 
     def sample(self, n_sample, size, device, guide_w = 0.0, cond=None):
         # we follow the guidance sampling scheme described in 'Classifier-Free Diffusion Guidance'

@@ -78,6 +78,7 @@ class DiTBlock(nn.Module):
         mlp_ratio=4.0,
         is_causal=True,
         spatial_rotary_emb: Optional[RotaryEmbedding] = None,
+        dim_head=16,
     ):
         super().__init__()
         self.is_causal = is_causal
@@ -88,7 +89,7 @@ class DiTBlock(nn.Module):
         self.s_attn = SpatialAxialAttention(
             hidden_size,
             heads=num_heads,
-            dim_head=hidden_size // num_heads,
+            dim_head=dim_head, # does not have to be: hidden_size // num_heads
             rotary_emb=spatial_rotary_emb,
         )
         self.s_norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
@@ -129,6 +130,7 @@ class DiT(nn.Module):
         external_cond_dim=25,
         gradient_checkpointing=False,
         dtype=torch.float32,
+        dim_head=16,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -142,7 +144,7 @@ class DiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, dtype=dtype)
         frame_h, frame_w = self.x_embedder.grid_size
 
-        self.spatial_rotary_emb = RotaryEmbedding(dim=hidden_size // num_heads // 2, freqs_for="pixel", max_freq=256)
+        self.spatial_rotary_emb = RotaryEmbedding(dim=dim_head // 2, freqs_for="pixel", max_freq=256)
         self.external_cond = nn.Linear(external_cond_dim, hidden_size) if external_cond_dim > 0 else nn.Identity()
 
         self.blocks = nn.ModuleList(
@@ -153,6 +155,7 @@ class DiT(nn.Module):
                     mlp_ratio=mlp_ratio,
                     is_causal=True,
                     spatial_rotary_emb=self.spatial_rotary_emb,
+                    dim_head=dim_head,
                 )
                 for _ in range(depth)
             ]
@@ -261,8 +264,9 @@ def dit_mnist(input_h=28, input_w=28, in_channels=1, patch_size=1, external_cond
         input_w=input_w,
         in_channels=in_channels,
         patch_size=patch_size,
-        hidden_size=128,
+        hidden_size=16,  # token dimension, theoretically it does not need to be large for small patch
         depth=6,
         num_heads=16,
         external_cond_dim=external_cond_dim,
+        dim_head=16,  # projected dimension of each head
     )

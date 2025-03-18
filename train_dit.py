@@ -21,7 +21,7 @@ RUN_NAME = f'dit_mnist'
 WANDB_ONLINE = True # turn this on to pipe experiment to cloud
 
 # export cuda device
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 # wandb experiment tracker
 
