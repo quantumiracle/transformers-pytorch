@@ -174,6 +174,7 @@ class InfiniAttention(nn.Module):
         bptt = True, 
         delta_update = True,
         segment_len = 32,
+        memory_pe = False,
     ):
         super().__init__()
         inner_dim = dim_head *  heads
@@ -183,7 +184,7 @@ class InfiniAttention(nn.Module):
         self.rotary_emb = RotaryEmbedding(dim_head)
         self.attend = nn.Softmax(dim = -1)
         self.dim_head = dim_head
-
+        self.memory_pe = memory_pe
         self.is_causal = is_causal
         self.bptt = bptt
         self.delta_update = delta_update
@@ -215,6 +216,9 @@ class InfiniAttention(nn.Module):
         next_cache = tuple(map(inverse_segment, (k, v)))
 
         # relative positions
+        if not self.memory_pe:
+            q_no_pe, k_no_pe = tuple(rearrange(t, 'b h (w n) d -> w b h n d', n = self.segment_len) for t in (q, k))
+
         q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)
 
         # segment
@@ -222,8 +226,10 @@ class InfiniAttention(nn.Module):
 
         # initialize memory and z
         if memory_cache is None:
-            mem = torch.zeros(1, self.heads, self.dim_head, self.dim_head).to(self.device)
-            z = torch.zeros(1, self.heads, self.dim_head).to(self.device)
+            # mem = torch.zeros(1, self.heads, self.dim_head, self.dim_head).to(self.device)
+            # z = torch.zeros(1, self.heads, self.dim_head).to(self.device)
+            mem = None
+            z = None
         else:
             mem, z = memory_cache
 
@@ -231,7 +237,7 @@ class InfiniAttention(nn.Module):
         # it's a loop version of infinite attention, cannot parallelize due to memory sequence nature
         # https://github.com/vmarinowski/infini-attention/blob/main/infini_attention/infini_attention.py
         # other code may parallel with segment: https://github.com/Beomi/InfiniTransformer/blob/045f4eba17a3155dbdc255d76b4623bebc768eb6/infini_llama/modeling_infini_llama.py#L975
-        for i in range(k.shape[0]):
+        for i in range(k.shape[0]):  # number of segments
             q_slice = q[i]
             k_slice = k[i]
             v_slice = v[i]
@@ -239,20 +245,25 @@ class InfiniAttention(nn.Module):
             # a simpler variant for attention computation
             out = F.scaled_dot_product_attention(query=q_slice, key=k_slice, value=v_slice, is_causal=self.is_causal)
 
+            if not self.memory_pe: # no pe for memory retrieval and update
+                q_slice = q_no_pe[i]
+                k_slice = k_no_pe[i]
+
+            # memory update
+            if self.bptt:
+                mem = updateMemory(mem, k_slice, v_slice, z, self.delta_update)
+                z = updateZ(z, k_slice)
+            else:
+                with torch.no_grad():
+                    mem = updateMemory(mem, k_slice, v_slice, z, self.delta_update)
+                    z = updateZ(z, k_slice)
+
             # memory retrieval
+            # first update then retrieve cause nan loss for bptt
             mem_out = getAttnMem(mem, z, q_slice)
             out = F.sigmoid(self.mem_beta) * mem_out + (1 - F.sigmoid(self.mem_beta)) * out
 
             outputs.append(out)
-
-            # memory update
-            if self.bptt:
-                new_mem = updateMemory(mem, k_slice, v_slice, z, self.delta_update)
-                new_z = updateZ(z, k_slice)
-            else:
-                with torch.no_grad():
-                    new_mem = updateMemory(mem, k_slice, v_slice, z, self.delta_update)
-                    new_z = updateZ(z, k_slice)
 
         out = torch.stack(outputs)
         out = rearrange(out, 'w b h n d -> (w b) n (h d)', b = batch)
@@ -276,6 +287,9 @@ class InfiniTransformer(Module):
         mlp_dim,
         segment_len,
         token_emb: Module | None = None,
+        memory_pe = False,
+        bptt = True,
+        delta_update = True,
         ):
         super().__init__()
         self.norm = nn.RMSNorm(dim) # or LayerNorm
@@ -287,7 +301,7 @@ class InfiniTransformer(Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                InfiniAttention(dim, heads = heads, dim_head = dim_head, segment_len = segment_len),
+                InfiniAttention(dim, heads = heads, dim_head = dim_head, segment_len = segment_len, memory_pe = memory_pe, bptt = bptt, delta_update = delta_update),
                 FeedForward(dim, mlp_dim)
             ]))
 
@@ -317,7 +331,7 @@ class InfiniTransformer(Module):
 
         with tqdm.tqdm(total = sample_num_times, disable = not show_progress) as pbar:
             while out.shape[-1] < seq_len:
-                logits, next_cache = self.forward(
+                logits, next_cache = self.forward(  # TODO: add memory cache
                     out,
                     cache = cache,
                     return_loss = False,

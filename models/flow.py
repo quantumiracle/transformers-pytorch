@@ -21,8 +21,39 @@ def extract(a, t, x_shape):
     return out.reshape(f, b, *((1,) * (len(x_shape) - 2)))
 
 class FlowMatching(nn.Module):
+    """
+    %     def lognorm(mu=0, sigma=1, size=None):
+    
+    %         # get logit normal distribution
+    %         samples = scipy.norm.rvs(loc=mu, \
+    %                     scale=sigma, size=size)
+                        
+    %         # transform to 0 to 1
+    %         samples = 1 / (1 + np.exp(-samples))
+    %         return samples
+        
+    %     while training:
+    %         # 1. data shifting
+    %         # data: (B, C, H, W)
+    %         # noise: (B, c, H, W)
+    %         data = data * (target_std / data_std)
+    %         noise = torch.rand_nlike(data)
+
+    %         # 2. concentrating
+    %         # timestep: (B, )
+    %         t = lognorm(0, 1, t.shape[0])
+    %         x_t = t*data + (1-t)*noise
+    %         pred = model(x_t, t, y)
+
+    %         # 3. improved supervision
+    %         v = data - noise
+    %         loss = (pred - v)**2.mean() + \
+    %         1 - cosine_similarity(pred, v, dim=1).mean()
+
+    %         loss.backward()
+    """
     def __init__(self, model, n_T, device, drop_prob=0.1, add_velocity_direction_loss=False, 
-                 lognorm_t=False, target_std=1.0):
+                 lognorm_t=False, target_std=1.0, lognorm_mu=0.0, lognorm_sigma=1.0):
         super(FlowMatching, self).__init__()
         self.model = model.to(device)
 
@@ -37,13 +68,15 @@ class FlowMatching(nn.Module):
         self.add_velocity_direction_loss = add_velocity_direction_loss
         self.lognorm_t = lognorm_t
         self.target_std = target_std
+        self.lognorm_mu = lognorm_mu
+        self.lognorm_sigma = lognorm_sigma
 
     def lognorm_sample(self, size):
         """
-        Sample from logit-normal distribution
+        Sample from logit-normal distribution with configurable mu and sigma
         """
-        # Sample from normal distribution
-        samples = torch.randn(size).to(self.device)
+        # Sample from normal distribution with specified mu and sigma
+        samples = torch.randn(size).to(self.device) * self.lognorm_sigma + self.lognorm_mu
         
         # Transform to 0 to 1 using sigmoid
         samples = 1.0 / (1.0 + torch.exp(-samples))

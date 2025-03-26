@@ -20,7 +20,7 @@ RUN_NAME = f'flt_mnist'
 WANDB_ONLINE = True # turn this on to pipe experiment to cloud
 
 # export cuda device
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # wandb experiment tracker
 import wandb
@@ -46,8 +46,10 @@ def train_mnist():
     USE_ONE_HOT_CLASS = True
     # New parameters for improved flow matching
     add_velocity_direction_loss = True
-    lognorm_t = True
-    target_std = 0.82  # Target standard deviation for data shifting; disable with 1.0
+    lognorm_t = False
+    target_std = 1.0  # 0.82  Target standard deviation for data shifting; disable with 1.0
+    lognorm_mu = 0.0  # Mean for logit-normal distribution
+    lognorm_sigma = 1.0  # Standard deviation for logit-normal distribution
     
     if USE_ONE_HOT_CLASS:
         external_cond_dim = 10  # MNIST has 10 classes
@@ -60,7 +62,8 @@ def train_mnist():
                      patch_size=patch_size, external_cond_dim=external_cond_dim)
     flow_model = FlowMatching(model, n_T=n_T, device=device, drop_prob=0.1,
                              add_velocity_direction_loss=add_velocity_direction_loss,
-                             lognorm_t=lognorm_t, target_std=target_std)
+                             lognorm_t=lognorm_t, target_std=target_std,
+                             lognorm_mu=lognorm_mu, lognorm_sigma=lognorm_sigma)
     flow_model.to(device)
 
     # optionally load a model

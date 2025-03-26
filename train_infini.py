@@ -32,6 +32,9 @@ GENERATE_LENGTH = 512
 SHOULD_GENERATE = True
 USE_FAST_INFERENCE = False # cache is hard to implement for infinite attention at inference due to segmentation
 SEQ_LEN = 512
+MEMORY_PE = True # use positional encoding in memory or not; the original paper does not use it
+BPTT = True
+DELTA_UPDATE = True
 
 # experiment related
 
@@ -69,6 +72,9 @@ model = InfiniTransformer(
     dim_head = 64,
     mlp_dim = 512,
     segment_len = 32,  # segment for memory
+    memory_pe = MEMORY_PE,
+    bptt = BPTT,
+    delta_update = DELTA_UPDATE,
     ).cuda()
 
 # prepare enwik8 data
