@@ -132,13 +132,16 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval = 10., desc = 'training'):
 
     if SHOULD_GENERATE and i % GENERATE_EVERY == 0:
         model.eval()
-        inp = random.choice(val_dataset)[:PRIME_LENGTH]
+        # get random index from val_dataset
+        random_index = random.randint(0, len(val_dataset) - 1)
+        inp = val_dataset[random_index][:PRIME_LENGTH]
         prime = decode_tokens(inp)
         print(f'%s \n\n %s', (prime, '*' * 100))
 
         sample = model.sample(inp[None, ...], GENERATE_LENGTH, use_cache = USE_FAST_INFERENCE)
         output_str = decode_tokens(sample[0])
-        print(output_str)
-
+        # also print ground truth
+        print('output_str: ', output_str)
+        print('ground_truth: ', decode_tokens(val_dataset[random_index][PRIME_LENGTH:GENERATE_LENGTH]))
 model_save_path = os.path.join(SAVE_DIR, SAVE_FILENAME)
 torch.save(model.state_dict(), model_save_path) 

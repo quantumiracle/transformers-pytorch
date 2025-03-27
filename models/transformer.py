@@ -231,7 +231,7 @@ class Transformer(Module):
 
         is_inferencing = exists(cache)
 
-        # when inferencing, only do one token at a time
+        # when inferencing with cache, only do one token at a time
         if is_inferencing:
             x = x[:, -1:]
         

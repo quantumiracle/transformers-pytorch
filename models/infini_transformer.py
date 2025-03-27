@@ -226,10 +226,8 @@ class InfiniAttention(nn.Module):
 
         # initialize memory and z
         if memory_cache is None:
-            # mem = torch.zeros(1, self.heads, self.dim_head, self.dim_head).to(self.device)
-            # z = torch.zeros(1, self.heads, self.dim_head).to(self.device)
-            mem = None
-            z = None
+            mem = torch.zeros(batch, self.heads, self.dim_head, self.dim_head).to(self.device)
+            z = torch.zeros(batch, self.heads, self.dim_head).to(self.device) + 1e-6 # as denominator, avoid division to 0
         else:
             mem, z = memory_cache
 
@@ -249,6 +247,11 @@ class InfiniAttention(nn.Module):
                 q_slice = q_no_pe[i]
                 k_slice = k_no_pe[i]
 
+            # memory retrieval (if update before retrieval, the information in segment is leaked and no longer causal; low training loss but high inference error.)
+            mem_out = getAttnMem(mem, z, q_slice)
+            out = F.sigmoid(self.mem_beta) * mem_out + (1 - F.sigmoid(self.mem_beta)) * out
+            outputs.append(out)
+
             # memory update
             if self.bptt:
                 mem = updateMemory(mem, k_slice, v_slice, z, self.delta_update)
@@ -257,13 +260,6 @@ class InfiniAttention(nn.Module):
                 with torch.no_grad():
                     mem = updateMemory(mem, k_slice, v_slice, z, self.delta_update)
                     z = updateZ(z, k_slice)
-
-            # memory retrieval
-            # first update then retrieve cause nan loss for bptt
-            mem_out = getAttnMem(mem, z, q_slice)
-            out = F.sigmoid(self.mem_beta) * mem_out + (1 - F.sigmoid(self.mem_beta)) * out
-
-            outputs.append(out)
 
         out = torch.stack(outputs)
         out = rearrange(out, 'w b h n d -> (w b) n (h d)', b = batch)
@@ -274,7 +270,6 @@ class InfiniAttention(nn.Module):
         out = inverse_segment(out)
 
         return out, next_cache
-
 
 class InfiniTransformer(Module):
     def __init__(
@@ -370,7 +365,7 @@ class InfiniTransformer(Module):
 
         is_inferencing = exists(cache)
 
-        # when inferencing, only do one token at a time
+        # when inferencing with cache, only do one token at a time
         if is_inferencing:
             x = x[:, -1:]
         
