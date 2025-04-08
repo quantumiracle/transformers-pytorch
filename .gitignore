@@ -6,3 +6,4 @@ data/diffusion_outputs1000/
 *.gif
 *.pyc
 data/
+saved_models/
