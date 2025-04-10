@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import math
+from models.utils.shortcut_target import create_targets, create_targets_naive
 
 def flow_matching_schedules(T):
     """
@@ -20,8 +22,9 @@ def extract(a, t, x_shape):
     out = a[t]
     return out.reshape(f, b, *((1,) * (len(x_shape) - 2)))
 
-class FlowMatching(nn.Module):
+class Shortcut(nn.Module):
     """
+    Modified from Flow Matching
     %     def lognorm(mu=0, sigma=1, size=None):
     
     %         # get logit normal distribution
@@ -53,15 +56,15 @@ class FlowMatching(nn.Module):
     %         loss.backward()
     """
     def __init__(self, model, n_T, device, drop_prob=0.1, add_velocity_direction_loss=False, 
-                 lognorm_t=False, target_std=1.0, lognorm_mu=0.0, lognorm_sigma=1.0):
-        super(FlowMatching, self).__init__()
+                 lognorm_t=False, target_std=1.0, lognorm_mu=0.0, lognorm_sigma=1.0, training_type="shortcut"):
+        super(Shortcut, self).__init__()
         self.model = model.to(device)
 
         # register_buffer allows accessing dictionary produced by flow_matching_schedules
         for k, v in flow_matching_schedules(n_T).items():
             self.register_buffer(k, v)
 
-        self.n_T = n_T
+        self.n_T = n_T  # allow only: [1, 2, 4, 8, 16, 32, 128]
         self.device = device
         self.drop_prob = drop_prob
         self.loss_mse = nn.MSELoss()
@@ -70,7 +73,7 @@ class FlowMatching(nn.Module):
         self.target_std = target_std
         self.lognorm_mu = lognorm_mu
         self.lognorm_sigma = lognorm_sigma
-
+        self.training_type = training_type
     def lognorm_sample(self, size):
         """
         Sample from logit-normal distribution with configurable mu and sigma
@@ -86,13 +89,13 @@ class FlowMatching(nn.Module):
         """
         Compute the straight-line flow field between x0 and x1 at time t
         """
-        return x1 - x0
+        return x1 - (1-1e-5)*x0  # (1-1e-5) is added by shortcut official implementation
     
     def get_xt(self, x0, x1, t):
         """
         Compute the intermediate point at time t between x0 and x1
         """
-        return x0 + t * (x1 - x0)
+        return x0 + t * (x1 - (1-1e-5)*x0)  # (1-1e-5) is added by shortcut official implementation
 
     def forward(self, x0, x1, c):
         """
@@ -108,39 +111,46 @@ class FlowMatching(nn.Module):
         
         if x0.ndim == 4:  # (B, C, H, W)
             if self.lognorm_t:
-                _ts = self.lognorm_sample((x0.shape[0], 1, 1, 1))
-            else:
+                t = self.lognorm_sample((x0.shape[0], 1, 1, 1))
+            else:   
                 # continuous time
-                # _ts = torch.rand(x0.shape[0], 1, 1, 1).to(self.device)  # t ~ Uniform(0, 1)
+                t = torch.rand(x0.shape[0], 1, 1, 1).to(self.device)  # t ~ Uniform(0, 1)
                 # discrete time
-                _ts = torch.randint(low=0, high=self.n_T, size=(x0.shape[0], 1, 1, 1), dtype=torch.float32).to(self.device)
-                _ts /= self.n_T
+                t = torch.randint(low=0, high=self.n_T, size=(x0.shape[0], 1, 1, 1), dtype=torch.float32).to(self.device)
+                t /= self.n_T
         elif x0.ndim == 5:  # (B, T, C, H, W)
             if self.lognorm_t:
-                _ts = self.lognorm_sample((x0.shape[0], x0.shape[1], 1, 1, 1))
+                t = self.lognorm_sample((x0.shape[0], x0.shape[1], 1, 1, 1))
             else:
                 # continuous time
-                # _ts = torch.rand(x0.shape[0], x0.shape[1], 1, 1, 1).to(self.device)  # t ~ Uniform(0, 1)
+                # t = torch.rand(x0.shape[0], x0.shape[1], 1, 1, 1).to(self.device)  # t ~ Uniform(0, 1)
                 # discrete time
-                _ts = torch.randint(low=0, high=self.n_T, size=(x0.shape[0], x0.shape[1], 1, 1, 1), dtype=torch.float32).to(self.device)
-                _ts /= self.n_T
+                t = torch.randint(low=0, high=self.n_T, size=(x0.shape[0], x0.shape[1], 1, 1, 1), dtype=torch.float32).to(self.device)
+                t /= self.n_T
         else:
             raise ValueError(f"x.ndim must be 4 or 5, but got {x0.ndim}")
         
         # Compute x_t at the sampled time steps
-        x_t = self.get_xt(x0, x1, _ts)
+        # x_t = self.get_xt(x0, x1, t)
         
         # Compute the target vector field (straight line from x0 to x1)
-        target_field = self.get_flow_field(x0, x1, _ts)
+        # target_field = self.get_flow_field(x0, x1, t)
         
         # Dropout context with some probability
         context_mask = torch.bernoulli(torch.ones_like(c) - self.drop_prob).to(self.device)
-        
+
+        self.model.eval()
+        if self.training_type=="naive":
+            x_t, target_field, dt = create_targets_naive(x1, t, self.n_T, self.device)
+        elif self.training_type=="shortcut":
+            x_t, target_field, t, dt, context_mask = create_targets(x1, t, c, context_mask, self.model, self.n_T, self.device, bootstrap_every=8)
+        self.model.train()
+
         # Get model prediction
-        pred_field = self.model(x_t, _ts.squeeze(), c, context_mask)
-        
+        pred_field = self.model(x_t, t.squeeze(), dt, c, context_mask)
+
         # MSE loss
-        mse_loss = self.loss_mse(target_field, pred_field)
+        mse_loss = self.loss_mse(pred_field, target_field)
         
         # Add velocity direction loss if enabled
         if self.add_velocity_direction_loss:
@@ -192,7 +202,7 @@ class FlowMatching(nn.Module):
         for i in range(steps):
             t_i = i * dt
             print(f'sampling timestep {i+1}/{steps}, t={t_i:.4f}', end='\r')
-            
+ 
             # Current time step tensor
             t_is = torch.ones(n_sample) * t_i
             t_is = t_is.to(device)
@@ -207,8 +217,10 @@ class FlowMatching(nn.Module):
             else:
                 raise ValueError(f"x_i.ndim must be 4 or 5, but got {x_i.ndim}")
             
+            dt_base = torch.ones_like(t_is).to(device) * math.log2(steps)
+
             # Get vector field prediction
-            v = self.model(x_i, t_is, cond, context_mask)
+            v = self.model(x_i, t_is, dt_base, cond, context_mask)
             
             # Split predictions and compute weighting for classifier-free guidance
             v1 = v[:n_sample]
