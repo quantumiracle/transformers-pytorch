@@ -59,7 +59,7 @@ DiT variant:
 python train_flt.py
 ```
 
-### Shortcut Transformer
+### Shortcut Model (Flow Matching) with Transformer
 ```
 python train_shortcut.py
 ```
