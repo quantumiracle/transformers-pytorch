@@ -1,8 +1,8 @@
 """
 References:
     - DiT: https://github.com/facebookresearch/DiT/blob/main/models.py
-    - Diffusion Forcing: https://github.com/buoyancy99/diffusion-forcing/blob/main/algorithms/diffusion_forcing/models/unet3d.py
-    - Latte: https://github.com/Vchitect/Latte/blob/main/models/latte.py
+    - Shortcut Models: https://github.com/kvfrans/shortcut-models
+    - Shortcut Pytorch: https://github.com/smileyenot983/shortcut_pytorch
 
 For shortcut model, it has additional dt_embedder.
 """

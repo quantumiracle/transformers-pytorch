@@ -25,38 +25,9 @@ def extract(a, t, x_shape):
 class Shortcut(nn.Module):
     """
     Modified from Flow Matching
-    %     def lognorm(mu=0, sigma=1, size=None):
-    
-    %         # get logit normal distribution
-    %         samples = scipy.norm.rvs(loc=mu, \
-    %                     scale=sigma, size=size)
-                        
-    %         # transform to 0 to 1
-    %         samples = 1 / (1 + np.exp(-samples))
-    %         return samples
-        
-    %     while training:
-    %         # 1. data shifting
-    %         # data: (B, C, H, W)
-    %         # noise: (B, c, H, W)
-    %         data = data * (target_std / data_std)
-    %         noise = torch.rand_nlike(data)
-
-    %         # 2. concentrating
-    %         # timestep: (B, )
-    %         t = lognorm(0, 1, t.shape[0])
-    %         x_t = t*data + (1-t)*noise
-    %         pred = model(x_t, t, y)
-
-    %         # 3. improved supervision
-    %         v = data - noise
-    %         loss = (pred - v)**2.mean() + \
-    %         1 - cosine_similarity(pred, v, dim=1).mean()
-
-    %         loss.backward()
     """
     def __init__(self, model, n_T, device, drop_prob=0.1, add_velocity_direction_loss=False, 
-                 lognorm_t=False, target_std=1.0, lognorm_mu=0.0, lognorm_sigma=1.0, training_type="shortcut"):
+                 lognorm_t=False, target_std=1.0, lognorm_mu=0.0, lognorm_sigma=1.0, training_type="shortcut", bootstrap_every=4):
         super(Shortcut, self).__init__()
         self.model = model.to(device)
 
@@ -74,6 +45,8 @@ class Shortcut(nn.Module):
         self.lognorm_mu = lognorm_mu
         self.lognorm_sigma = lognorm_sigma
         self.training_type = training_type
+        self.bootstrap_every = bootstrap_every
+
     def lognorm_sample(self, size):
         """
         Sample from logit-normal distribution with configurable mu and sigma
@@ -143,7 +116,7 @@ class Shortcut(nn.Module):
         if self.training_type=="naive":
             x_t, target_field, dt = create_targets_naive(x1, t, self.n_T, self.device)
         elif self.training_type=="shortcut":
-            x_t, target_field, t, dt, context_mask = create_targets(x1, t, c, context_mask, self.model, self.n_T, self.device, bootstrap_every=8)
+            x_t, target_field, t, dt, context_mask = create_targets(x1, t, c, context_mask, self.model, self.n_T, self.device, bootstrap_every=self.bootstrap_every)
         self.model.train()
 
         # Get model prediction

@@ -59,6 +59,11 @@ DiT variant:
 python train_flt.py
 ```
 
+### Shortcut Transformer
+```
+python train_shortcut.py
+```
+
 ### Unet
 ```
 python train_unet.py

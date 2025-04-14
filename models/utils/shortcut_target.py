@@ -21,8 +21,6 @@ def create_targets(images, batch_t, labels, context_mask, model, n_T, device, bo
     # 1. create step sizes dt
     bootstrap_batch_size = current_batch_size // bootstrap_every
     log2_sections = int(math.log2(n_T))
-    # print(f"log2_sections: {log2_sections}")
-    # print(f"bootstrap_batch_size: {bootstrap_batch_size}")
 
     dt_base = torch.repeat_interleave(log2_sections - 1 - torch.arange(log2_sections), bootstrap_batch_size // log2_sections)
     # print(f"dt_base: {dt_base}")
@@ -76,6 +74,7 @@ def create_targets(images, batch_t, labels, context_mask, model, n_T, device, bo
     
     bst_v = v_target
     bst_dt = dt_base
+    bst_xt = x_t
 
     # 4. generate flow-matching targets
     # sample t(normalized)
@@ -91,8 +90,8 @@ def create_targets(images, batch_t, labels, context_mask, model, n_T, device, bo
     # 5. merge flow and bootstrap
     bst_size_data = current_batch_size - bootstrap_batch_size
 
+    x_t = torch.cat([bst_xt, x_t[-bst_size_data:]], dim=0)
     t = torch.cat([t_full, batch_t[-bst_size_data:]], dim=0)
-
     dt_base = torch.cat([bst_dt, dt_base[-bst_size_data:]], dim=0)
     v_t = torch.cat([bst_v, v_t[-bst_size_data:]], dim=0)
 
