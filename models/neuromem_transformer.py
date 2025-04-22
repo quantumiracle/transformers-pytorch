@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn import Module, ModuleList, Linear
 from einops import repeat, rearrange, pack, unpack
 from einops.layers.torch import Rearrange
-from rotary_embedding_torch import RotaryEmbedding
+from models.utils.rotary_embedding_torch import RotaryEmbedding
 
 LinearNoBias = partial(Linear, bias = False)
 
@@ -69,6 +69,7 @@ class NeuralMemory(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, mem_dim: int, hidden_dim: int, stride: int):
         super().__init__()
         self.mem_dim = mem_dim
+        self.output_dim = output_dim
         self.stride = stride
         self.temporal_rotary_emb = RotaryEmbedding(dim=input_dim)
 
@@ -88,14 +89,15 @@ class NeuralMemory(nn.Module):
         k = k[:, :, :self.stride]
         v = v[:, :, :self.stride]
         prev_mem = prev_mem if prev_mem is not None else torch.zeros(B, H, self.stride, self.mem_dim, device=k.device)
-        kvm = torch.cat([k, v, prev_mem], dim=-1)
-        new_mem = self.update_net(kvm)
-        
+        kvm = torch.cat([k, v, prev_mem], dim=-1)  # if memory length not equal to k or v, needs to use attention with prev_mem as q
+        new_mem = self.update_net(kvm) + prev_mem  # add residual connection from previous memory
         return new_mem
 
     def forward_retrieve(self, q, mem=None):
         B, H, N, D = q.shape
-        # if mem is None:
+        if mem is None:
+            x_mem = torch.zeros(B, H, self.stride, self.output_dim, device=q.device)
+            return x_mem
         #     return torch.zeros_like(q)  # this only works when token dimension is the same as per head dimension
         
         k_mem = self.retrieve_key_proj(mem)
@@ -109,7 +111,7 @@ class NeuralMemory(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64, is_causal = True):
+    def __init__(self, dim, heads = 8, dim_head = 64, is_causal = True, stride=1):
         super().__init__()
         inner_dim = dim_head *  heads
         self.heads = heads
@@ -127,7 +129,7 @@ class Attention(nn.Module):
             output_dim=dim//heads, # 384//8
             mem_dim=dim_head,
             hidden_dim=1024,
-            stride=1
+            stride=stride
         )
 
     def forward(self, x, mem: Optional[torch.Tensor]):
@@ -136,19 +138,17 @@ class Attention(nn.Module):
         """
         x = self.norm(x)
 
-        B = x.shape[0]
+        B, H, D = x.shape
         qkv = self.to_qkv(x).chunk(3, dim = -1)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
 
         # update memory
         new_mem = self.temporal_memory.forward_update(k, v, mem)  # b, h, n, d
+
         # retrieve memory from the previous chunk
-        if mem is None:
-            x_mem = torch.zeros_like(x)
-        else:
-            x_mem = self.temporal_memory.forward_retrieve(q, mem) #  b, h, n, d
-            x_mem = rearrange(x_mem, "b h n d -> b n (h d)", b=B)
-        # print('memory: ', x_mem.shape, x.shape)
+        x_mem = self.temporal_memory.forward_retrieve(q, mem) #  b, h, n, d
+        x_mem = rearrange(x_mem, "b h n d -> b n (h d)", b=B)
+        # print('memory: ', x_mem.shape, new_mem.shape, x.shape)
         # concatenate memory frames and current frames
         x_tilta = torch.cat([x_mem, x], dim=1)
         qkv = self.to_qkv(x_tilta)
@@ -157,9 +157,9 @@ class Attention(nn.Module):
 
         # relative positions
         # TODO check rope k with memory
-        # q = self.rotary_emb.rotate_queries_or_keys(q, self.rotary_emb.freqs)
-        # k = self.rotary_emb.rotate_queries_or_keys(k, self.rotary_emb.freqs)
-        q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)
+        q = self.rotary_emb.rotate_queries_or_keys(q, self.rotary_emb.freqs)
+        k = self.rotary_emb.rotate_queries_or_keys(k, self.rotary_emb.freqs)
+        # q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info?
 
         # causal mask
         if self.is_causal:
@@ -168,8 +168,10 @@ class Attention(nn.Module):
 
         # attention
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+
         if self.is_causal:
-            dots.masked_fill_(causal_mask, float('-inf'))
+            # only mask the non-memory part
+            dots[:, :, -seq_len:, -seq_len:].masked_fill_(causal_mask, float('-inf'))
 
         attn = self.attend(dots)
 
@@ -215,6 +217,9 @@ class NeuromemTransformer(Module):
         token_emb: Module | None = None,
         ):
         super().__init__()
+        self.segment_length = 32
+        assert num_tokens % self.segment_length == 0, f"num_tokens {num_tokens} better be divisible by segment_length {self.segment_length}"
+        self.stride = self.segment_length // 2
         if dynamic_tanh:
             self.norm = DynamicTanh(dim)
         else:
@@ -227,11 +232,12 @@ class NeuromemTransformer(Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                Attention(dim, heads = heads, dim_head = dim_head),
+                Attention(dim, heads = heads, dim_head = dim_head, stride=self.stride),
                 FeedForward(dim, mlp_dim)
             ]))
 
         self.to_logits = LinearNoBias(dim, num_tokens)
+
 
     @torch.no_grad()
     def sample(
@@ -257,8 +263,10 @@ class NeuromemTransformer(Module):
         with tqdm.tqdm(total = sample_num_times, disable = not show_progress) as pbar:
             while out.shape[-1] < seq_len:
                 logits, mem = self.forward_one_step(
-                    out,
+                    # out[:, -1:],  # TODO this may also be right; but mem is short as 1?
+                    out[:, -(self.segment_length-1):],  # training with fixed segment length, same for inference
                     mem = mem,
+                    return_loss = False,
                 )
 
                 if not exists(logits):
@@ -280,10 +288,11 @@ class NeuromemTransformer(Module):
         self, 
         x,
         mem = None,
+        return_loss = False,
         ):
+        if return_loss:
+            x, labels = x[:, :-1], x[:, 1:]
         x = self.token_emb(x)
-
-        x = x[:, -1:]
         
         if mem is None:
             # first step
@@ -296,7 +305,11 @@ class NeuromemTransformer(Module):
         x = self.norm(x)
         logits = self.to_logits(x)
 
-        return logits, mem
+        if return_loss:
+            loss = F.cross_entropy(rearrange(logits, 'b n l -> b l n'), labels)
+            return loss, mem
+        else:
+            return logits, mem
 
     def forward(
         self, 
@@ -305,42 +318,22 @@ class NeuromemTransformer(Module):
         return_loss = False,
         ):
         seq_len = x.shape[1]
-        out = x[:, :1]  # only first token
         mem = None
-        # segment_length = 30
-        # stride = segment_length // 2
-        temperature = 1.5
-        logits_track = []
-        # for start, end in zip(range(0, seq_len - segment_length + stride, stride), range(segment_length, seq_len + stride, stride)):
-        #     if end > seq_len:
-        #         end = seq_len
-        #     out = x[:, start:end]
-        #     logits, mem = self.forward_one_step(
-        #         out,
-        #         mem = mem,
-        #     )
-            
-        while out.shape[-1] < seq_len:
-            logits, mem = self.forward_one_step(
+        losses = []
+        # overlapping segments
+        for start, end in zip(range(0, seq_len - self.segment_length + self.stride, self.stride), range(self.segment_length, seq_len + self.stride, self.stride)):
+            if end > seq_len:
+                end = seq_len
+            out = x[:, start:end]
+            loss, mem = self.forward_one_step(
                 out,
                 mem = mem,
+                return_loss = return_loss,
             )
-
-            if not exists(logits):
-                continue
-
-            logits = logits[:, -1]
-            logits_track.append(logits)
-            # logits = filter_fn(logits, **filter_kwargs)
-            sample = gumbel_sample(logits, temperature = temperature)
-
-            out = torch.cat((out, sample), dim = -1)
+            losses.append(loss)
 
         if return_loss:
-            logits = torch.stack(logits_track, dim=1)
-            labels = x[:, 1:]
-            print('logits: ', logits.shape, labels.shape)
-            loss = F.cross_entropy(rearrange(logits, 'b n l -> b l n'), labels)
-            return loss 
+            loss = torch.stack(losses).mean()
+            return loss
         else:
-            return out
+            return None
