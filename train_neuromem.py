@@ -15,7 +15,7 @@ from models.neuromem_transformer import (
     NeuromemTransformer,
 )
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 # date
 import datetime
 date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -36,7 +36,7 @@ GENERATE_LENGTH = 512
 SHOULD_GENERATE = True
 USE_FAST_INFERENCE = True
 SEQ_LEN = 512
-DYNAMIC_TANH = True
+DYNAMIC_TANH = False
 
 # experiment related
 

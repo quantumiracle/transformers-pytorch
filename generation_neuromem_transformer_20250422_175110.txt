@@ -1,0 +1,8 @@
+PROMPT:
+f the SchrÃ¶dinger equation for the hydrogen atom uses the fact that the [[Coulomb potential]] produ
+
+GENERATED:
+ction of the [[vireation]] is a [[colore viology|necolor]], signouncylight of the [[Earomen]], by would and appearing the reading of the dorum, and helped, pittle in a spears of the party in the locations in would to the emigal wear, pleaving to the occadities, however censous ship origital work to the prane of [[popular]], [[polish rotor]], and members work of an used cond in [[Gruarian right|Calcosch]], a c
+
+GROUND TRUTH:
+ced by the nucleus is [[isotropic]] (it only depends on the distance to the nucleus). Although the resulting [[energy eigenfunctions]] (the &quot;orbitals&quot;) are not necessarily isotropic themselves, their dependence on the [[angular coordinates]] follows completely generally from this isotropy of the underlying potential: The states are not only [[eigenstates]] of the [[Hamiltonian (quantum mechanics)|Hamiltonian]], but also eigenstates of the [[angular momentum operator]]. This corresponds to the fact

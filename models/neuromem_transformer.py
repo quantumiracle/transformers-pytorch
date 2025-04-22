@@ -73,6 +73,7 @@ class NeuralMemory(nn.Module):
         self.output_dim = output_dim
         self.stride = stride
         self.temporal_rotary_emb = RotaryEmbedding(dim=input_dim)
+        self.residual_mem_update = False
 
         self.update_net = nn.Sequential(
             nn.Linear(2 * input_dim + mem_dim, hidden_dim),
@@ -91,7 +92,10 @@ class NeuralMemory(nn.Module):
         v = v[:, :, :self.stride]
         prev_mem = prev_mem if prev_mem is not None else torch.zeros(B, H, self.stride, self.mem_dim, device=k.device)
         kvm = torch.cat([k, v, prev_mem], dim=-1)  # if memory length not equal to k or v, needs to use attention with prev_mem as q
-        new_mem = self.update_net(kvm) + prev_mem  # add residual connection from previous memory
+        if self.residual_mem_update:
+            new_mem = self.update_net(kvm) + prev_mem  # add residual connection from previous memory
+        else:
+            new_mem = self.update_net(kvm)
         return new_mem
 
     def forward_retrieve(self, q, mem=None):
@@ -160,12 +164,15 @@ class Attention(nn.Module):
         _, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv.chunk(3, dim=-1))
 
         # relative positions
-        # TODO check rope k with memory
         ## models.utils.rotary_embedding_torch
+        ## this one has bad performance due to cache memory in k (different length from q)
         # q = self.rotary_emb.rotate_queries_or_keys(q, self.rotary_emb.freqs)
         # k = self.rotary_emb.rotate_queries_or_keys(k, self.rotary_emb.freqs)
 
         ## rotary_embedding_torch
+        # k is cached with memory, so its longer than q
+        # this funcion auto scales q and k due to different lengths
+        # additionally applies 
         q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info? 
 
         # causal mask
