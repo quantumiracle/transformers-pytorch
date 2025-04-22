@@ -15,7 +15,7 @@ from models.transformer import (
     Transformer,
 )
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # constants
 

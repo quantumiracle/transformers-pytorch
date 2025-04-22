@@ -1,0 +1,114 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Currently logged in as: quantumiracle1. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.18.5
+wandb: Run data is saved locally in /data2/zihan/research/transformers-pytorch/wandb/run-20250422_142730-dmbdo6d5
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run cool-firefly-33
+wandb: ⭐️ View project at https://wandb.ai/quantumiracle1/transformer
+wandb: 🚀 View run at https://wandb.ai/quantumiracle1/transformer/runs/dmbdo6d5
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+training:   0%|          | 0/100000 [00:00<?, ?it/s]training:   0%|          | 0/100000 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/data2/zihan/research/transformers-pytorch/train_neuromem.py", line 113, in <module>
+    loss = model(next(train_loader), return_loss = True)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/zihan/research/transformers-pytorch/models/neuromem_transformer.py", line 328, in forward
+    loss, mem = self.forward_one_step(
+  File "/data2/zihan/research/transformers-pytorch/models/neuromem_transformer.py", line 301, in forward_one_step
+    attn_out, mem[i] = attn(x, mem = mem_i)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/zihan/research/transformers-pytorch/models/neuromem_transformer.py", line 162, in forward
+    q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info?
+  File "/data2/zihan/research/transformers-pytorch/models/utils/rotary_embedding_torch.py", line 211, in rotate_queries_with_cached_keys
+    rotated_q = self.rotate_queries_or_keys(q, seq_dim=seq_dim, scale=q_scale, offset=k_len - q_len + offset)
+TypeError: RotaryEmbedding.rotate_queries_or_keys() missing 1 required positional argument: 'freqs'
+Traceback (most recent call last):
+  File "/data2/zihan/research/transformers-pytorch/train_neuromem.py", line 113, in <module>
+    loss = model(next(train_loader), return_loss = True)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/zihan/research/transformers-pytorch/models/neuromem_transformer.py", line 328, in forward
+    loss, mem = self.forward_one_step(
+  File "/data2/zihan/research/transformers-pytorch/models/neuromem_transformer.py", line 301, in forward_one_step
+    attn_out, mem[i] = attn(x, mem = mem_i)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/data/zihan/anaconda3/envs/fast/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/zihan/research/transformers-pytorch/models/neuromem_transformer.py", line 162, in forward
+    q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info?
+  File "/data2/zihan/research/transformers-pytorch/models/utils/rotary_embedding_torch.py", line 211, in rotate_queries_with_cached_keys
+    rotated_q = self.rotate_queries_or_keys(q, seq_dim=seq_dim, scale=q_scale, offset=k_len - q_len + offset)
+TypeError: RotaryEmbedding.rotate_queries_or_keys() missing 1 required positional argument: 'freqs'
+[1;34mwandb[0m: 🚀 View run [33mcool-firefly-33[0m at: [34mhttps://wandb.ai/quantumiracle1/transformer/runs/dmbdo6d5[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20250422_142730-dmbdo6d5/logs[0m
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Currently logged in as: quantumiracle1. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.18.5
+wandb: Run data is saved locally in /data2/zihan/research/transformers-pytorch/wandb/run-20250422_142921-yb9upciu
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run honest-blaze-34
+wandb: ⭐️ View project at https://wandb.ai/quantumiracle1/transformer
+wandb: 🚀 View run at https://wandb.ai/quantumiracle1/transformer/runs/yb9upciu
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+training:   0%|          | 0/100000 [00:00<?, ?it/s]training loss: 5.5916643142700195
+validation loss: 5.597965240478516
+%s 
+
+ %s ('nlike neighbouring [[Greenland]], Iceland is considered to be a part of [[Europe]], not a part of [[', '****************************************************************************************************')
+
+  0%|          | 0/412 [00:00<?, ?it/s][A
+  2%|▏         | 8/412 [00:00<00:05, 77.04it/s][A
+  4%|▍         | 17/412 [00:00<00:04, 83.09it/s][A
+  6%|▋         | 26/412 [00:00<00:04, 85.44it/s][A
+  8%|▊         | 35/412 [00:00<00:04, 86.47it/s][A
+ 11%|█         | 44/412 [00:00<00:04, 86.92it/s][A
+ 13%|█▎        | 53/412 [00:00<00:04, 87.20it/s][A
+ 15%|█▌        | 62/412 [00:00<00:04, 87.46it/s][A
+ 17%|█▋        | 71/412 [00:00<00:03, 87.48it/s][A
+ 19%|█▉        | 80/412 [00:00<00:03, 87.72it/s][A
+ 22%|██▏       | 89/412 [00:01<00:03, 87.74it/s][A
+ 24%|██▍       | 98/412 [00:01<00:03, 87.82it/s][A
+ 26%|██▌       | 107/412 [00:01<00:03, 87.74it/s][A
+ 28%|██▊       | 116/412 [00:01<00:03, 87.64it/s][A
+ 30%|███       | 125/412 [00:01<00:03, 87.74it/s][A
+ 33%|███▎      | 134/412 [00:01<00:03, 87.82it/s][A
+ 35%|███▍      | 143/412 [00:01<00:03, 87.87it/s][A
+ 37%|███▋      | 152/412 [00:01<00:02, 87.84it/s][A
+ 39%|███▉      | 161/412 [00:01<00:02, 87.90it/s][A
+ 41%|████▏     | 170/412 [00:01<00:02, 87.95it/s][A
+ 43%|████▎     | 179/412 [00:02<00:02, 87.99it/s][A
+ 46%|████▌     | 188/412 [00:02<00:02, 87.92it/s][A
+ 48%|████▊     | 197/412 [00:02<00:02, 88.05it/s][A
+ 50%|█████     | 206/412 [00:02<00:02, 88.04it/s][A
+ 52%|█████▏    | 215/412 [00:02<00:02, 88.07it/s][A
+ 54%|█████▍    | 224/412 [00:02<00:02, 88.06it/s][A
+ 57%|█████▋    | 233/412 [00:02<00:02, 88.14it/s][A
+ 59%|█████▊    | 242/412 [00:02<00:01, 88.20it/s][A
+ 61%|██████    | 251/412 [00:02<00:01, 88.10it/s][A
+ 63%|██████▎   | 260/412 [00:02<00:01, 88.08it/s][A
+ 65%|██████▌   | 269/412 [00:03<00:01, 88.14it/s][A
+ 67%|██████▋   | 278/412 [00:03<00:01, 88.05it/s][A
+ 70%|██████▉   | 287/412 [00:03<00:01, 88.13it/s][A
+ 72%|███████▏  | 296/412 [00:03<00:01, 88.12it/s][A
+ 74%|███████▍  | 305/412 [00:03<00:01, 88.14it/s][A
+ 76%|███████▌  | 314/412 [00:03<00:01, 88.04it/s][A
+ 78%|███████▊  | 323/412 [00:03<00:01, 88.14it/s][A
+ 81%|████████  | 332/412 [00:03<00:00, 88.16it/s][A
+ 83%|████████▎ | 341/412 [00:03<00:00, 88.00it/s][A
+ 85%|████████▍ | 350/412 [00:03<00:00, 87.86it/s][A
+ 87%|████████▋ | 359/412 [00:04<00:00, 87.64it/s][A
+ 89%|████████▉ | 368/412 [00:04<00:00, 87.57it/s][A
+ 92%|█████████▏| 377/412 [00:04<00:00, 87.84it/s][A
+ 94%|█████████▎| 386/412 [00:04<00:00, 87.85it/s][A
+ 96%|█████████▌| 395/412 [00:04<00:00, 88.24it/s][A
+ 98%|█████████▊| 404/412 [00:04<00:00, 88.48it/s][A100%|██████████| 412/412 [00:04<00:00, 87.77it/s]
+training:   0%|          | 2/100000 [00:13<190:05:56,  6.84s/it]training:   0%|          | 5/100000 [00:26<139:47:31,  5.03s/it]training:   0%|          | 8/100000 [00:38<127:50:47,  4.60s/it]training:   0%|          | 8/100000 [00:50<127:50:47,  4.60s/it]training:   0%|          | 11/100000 [00:51<123:10:43,  4.43s/it]training:   0%|          | 14/100000 [01:03<120:31:23,  4.34s/it]training:   0%|          | 17/100000 [01:16<119:08:56,  4.29s/it]training:   0%|          | 20/100000 [01:28<117:58:45,  4.25s/it]training:   0%|          | 20/100000 [01:40<117:58:45,  4.25s/it]training:   0%|          | 23/100000 [01:41<117:14:39,  4.22s/it]training:   0%|          | 26/100000 [01:54<117:05:19,  4.22s/it]training:   0%|          | 29/100000 [02:06<116:40:52,  4.20s/it]training:   0%|          | 32/100000 [02:19<116:24:37,  4.19s/it]training:   0%|          | 32/100000 [02:30<116:24:37,  4.19s/it]training:   0%|          | 35/100000 [02:31<116:39:21,  4.20s/it]training:   0%|          | 38/100000 [02:44<116:33:40,  4.20s/it]training:   0%|          | 41/100000 [02:56<116:49:32,  4.21s/it]training:   0%|          | 44/100000 [03:09<116:39:31,  4.20s/it]training:   0%|          | 44/100000 [03:20<116:39:31,  4.20s/it]training:   0%|          | 47/100000 [03:22<116:53:46,  4.21s/it]training:   0%|          | 50/100000 [03:34<116:44:38,  4.20s/it]training:   0%|          | 53/100000 [03:47<116:30:31,  4.20s/it]training:   0%|          | 56/100000 [03:59<116:36:12,  4.20s/it]training:   0%|          | 56/100000 [04:10<116:36:12,  4.20s/it]training:   0%|          | 59/100000 [04:12<116:24:50,  4.19s/it]training:   0%|          | 62/100000 [04:25<116:23:55,  4.19s/it]training:   0%|          | 65/100000 [04:37<116:17:21,  4.19s/it]training:   0%|          | 65/100000 [04:50<116:17:21,  4.19s/it]training:   0%|          | 68/100000 [04:50<115:58:09,  4.18s/it]training:   0%|          | 71/100000 [05:02<116:06:40,  4.18s/it]training:   0%|          | 74/100000 [05:15<115:41:03,  4.17s/it]training:   0%|          | 77/100000 [05:27<115:43:54,  4.17s/it]training:   0%|          | 80/100000 [05:40<115:27:44,  4.16s/it]training:   0%|          | 80/100000 [05:50<115:27:44,  4.16s/it]training:   0%|          | 83/100000 [05:52<114:37:50,  4.13s/it]training:   0%|          | 86/100000 [06:04<113:28:27,  4.09s/it]training:   0%|          | 89/100000 [06:16<112:41:07,  4.06s/it]training:   0%|          | 92/100000 [06:28<112:33:01,  4.06s/it]training:   0%|          | 92/100000 [06:40<112:33:01,  4.06s/it]training:   0%|          | 95/100000 [06:40<112:16:05,  4.05s/it]training:   0%|          | 98/100000 [06:52<112:23:05,  4.05s/it]training:   0%|          | 101/100000 [07:04<112:57:51,  4.07s/it]training:   0%|          | 104/100000 [07:16<112:26:05,  4.05s/it]training:   0%|          | 107/100000 [07:28<111:56:34,  4.03s/it]training:   0%|          | 107/100000 [07:40<111:56:34,  4.03s/it]training:   0%|          | 110/100000 [07:40<111:34:17,  4.02s/it]training:   0%|          | 113/100000 [07:52<111:30:39,  4.02s/it]

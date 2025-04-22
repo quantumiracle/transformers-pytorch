@@ -16,11 +16,15 @@ from models.neuromem_transformer import (
 )
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# date
+import datetime
+date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
 
 # constants
 
 SAVE_DIR = './saved_models'
-SAVE_FILENAME = 'neuromem_transformer.pt'
+SAVE_FILENAME = f'neuromem_transformer_{date_time}.pt'
 NUM_BATCHES = int(1e5)
 BATCH_SIZE = 4
 GRADIENT_ACCUMULATE_EVERY = 4
@@ -46,7 +50,6 @@ import wandb
 wandb.init(project = PROJECT_NAME, mode = 'disabled' if not WANDB_ONLINE else 'online')
 wandb.run.name = RUN_NAME
 wandb.run.save()
-
 
 
 # helpers
@@ -127,13 +130,21 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval = 10., desc = 'training'):
             wandb.log(dict(val_loss = loss.item()), step = i)
     if SHOULD_GENERATE and i % GENERATE_EVERY == 0:
         model.eval()
-        inp = random.choice(val_dataset)[:PRIME_LENGTH]
+        # get random index from val_dataset
+        random_index = random.randint(0, len(val_dataset) - 1)
+        inp = val_dataset[random_index][:PRIME_LENGTH]
         prime = decode_tokens(inp)
         print(f'%s \n\n %s', (prime, '*' * 100))
 
         sample = model.sample(inp[None, ...], GENERATE_LENGTH)
         output_str = decode_tokens(sample[0])
-        print(output_str)
+        # also print ground truth
+        print('output_str: ', output_str)
+        print('ground_truth: ', decode_tokens(val_dataset[random_index][PRIME_LENGTH:GENERATE_LENGTH]))
+
+        model_save_path = os.path.join(SAVE_DIR, SAVE_FILENAME)
+        print(f'saving model to {model_save_path}')
+        torch.save(model.state_dict(), model_save_path) 
 
 model_save_path = os.path.join(SAVE_DIR, SAVE_FILENAME)
 torch.save(model.state_dict(), model_save_path) 

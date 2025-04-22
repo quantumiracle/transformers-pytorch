@@ -14,7 +14,8 @@ import torch.nn.functional as F
 from torch.nn import Module, ModuleList, Linear
 from einops import repeat, rearrange, pack, unpack
 from einops.layers.torch import Rearrange
-from models.utils.rotary_embedding_torch import RotaryEmbedding
+# from models.utils.rotary_embedding_torch import RotaryEmbedding
+from rotary_embedding_torch import RotaryEmbedding
 
 LinearNoBias = partial(Linear, bias = False)
 
@@ -132,7 +133,7 @@ class Attention(nn.Module):
             stride=stride
         )
 
-    def forward(self, x, mem: Optional[torch.Tensor]):
+    def forward(self, x, mem: Optional[torch.Tensor], mem_update=True,):
         """
         if there is memory, no need for cache
         """
@@ -143,7 +144,10 @@ class Attention(nn.Module):
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
 
         # update memory
-        new_mem = self.temporal_memory.forward_update(k, v, mem)  # b, h, n, d
+        if mem_update:
+            new_mem = self.temporal_memory.forward_update(k, v, mem)  # b, h, n, d
+        else:
+            new_mem = mem
 
         # retrieve memory from the previous chunk
         x_mem = self.temporal_memory.forward_retrieve(q, mem) #  b, h, n, d
@@ -157,9 +161,12 @@ class Attention(nn.Module):
 
         # relative positions
         # TODO check rope k with memory
-        q = self.rotary_emb.rotate_queries_or_keys(q, self.rotary_emb.freqs)
-        k = self.rotary_emb.rotate_queries_or_keys(k, self.rotary_emb.freqs)
-        # q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info?
+        ## models.utils.rotary_embedding_torch
+        # q = self.rotary_emb.rotate_queries_or_keys(q, self.rotary_emb.freqs)
+        # k = self.rotary_emb.rotate_queries_or_keys(k, self.rotary_emb.freqs)
+
+        ## rotary_embedding_torch
+        q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info? 
 
         # causal mask
         if self.is_causal:
@@ -262,10 +269,15 @@ class NeuromemTransformer(Module):
 
         with tqdm.tqdm(total = sample_num_times, disable = not show_progress) as pbar:
             while out.shape[-1] < seq_len:
+                if out.shape[-1] % self.stride == 0 or out.shape[-1] == prompt.shape[-1]: # initial or every stride, update memory
+                    mem_update = True
+                else:
+                    mem_update = False
                 logits, mem = self.forward_one_step(
                     # out[:, -1:],  # TODO this may also be right; but mem is short as 1?
                     out[:, -(self.segment_length-1):],  # training with fixed segment length, same for inference
                     mem = mem,
+                    mem_update = mem_update,
                     return_loss = False,
                 )
 
@@ -288,6 +300,7 @@ class NeuromemTransformer(Module):
         self, 
         x,
         mem = None,
+        mem_update = False,
         return_loss = False,
         ):
         if return_loss:
@@ -298,7 +311,7 @@ class NeuromemTransformer(Module):
             # first step
             mem = [None] * len(self.layers)
         for i, ((attn, ff), mem_i) in enumerate(zip(self.layers, mem)):
-            attn_out, mem[i] = attn(x, mem = mem_i)
+            attn_out, mem[i] = attn(x, mem = mem_i, mem_update = mem_update)
             x = attn_out + x
             x = ff(x) + x
 
@@ -328,6 +341,7 @@ class NeuromemTransformer(Module):
             loss, mem = self.forward_one_step(
                 out,
                 mem = mem,
+                mem_update = True,  # once memory update per stride
                 return_loss = return_loss,
             )
             losses.append(loss)
