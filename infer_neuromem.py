@@ -131,11 +131,11 @@ if __name__ == "__main__":
         print(ground_truth_text)
     
     # Save the generated text to a file
-    output_file = f"generation_{os.path.basename(args.model_path).split('.')[0]}.txt"
-    with open(output_file, 'w') as f:
-        f.write(f"PROMPT:\n{prompt_text}\n\n")
-        f.write(f"GENERATED:\n{generated_text}\n\n")
-        if ground_truth_text:
-            f.write(f"GROUND TRUTH:\n{ground_truth_text}")
+    # output_file = f"generation_{os.path.basename(args.model_path).split('.')[0]}.txt"
+    # with open(output_file, 'w') as f:
+    #     f.write(f"PROMPT:\n{prompt_text}\n\n")
+    #     f.write(f"GENERATED:\n{generated_text}\n\n")
+    #     if ground_truth_text:
+    #         f.write(f"GROUND TRUTH:\n{ground_truth_text}")
     
-    print(f"\nGenerated text saved to {output_file}") 
+    # print(f"\nGenerated text saved to {output_file}") 

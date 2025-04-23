@@ -15,7 +15,7 @@ from models.neuromem_transformer import (
     NeuromemTransformer,
 )
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 # date
 import datetime
 date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -65,6 +65,36 @@ class GEGLU(Module):
         x, gate = x.chunk(2, dim = -1)
         return F.silu(gate) * x
     
+class MemoryUpdater(nn.Module):
+    def __init__(self, hidden_dim, mem_dim):
+        super().__init__()
+        self.to_q = nn.Linear(hidden_dim, mem_dim, bias=False)
+        self.to_k = nn.Linear(hidden_dim, mem_dim, bias=False)
+        self.to_v = nn.Linear(hidden_dim, mem_dim, bias=False)
+        self.to_out = nn.Linear(mem_dim, mem_dim)
+        self.norm = nn.LayerNorm(mem_dim)
+
+    def forward(self, prev_mem, k, v):
+        # prev_mem: [B, h, L, d], k/v: [B, h, l, d]
+        B, h, L, d = prev_mem.shape
+        _, _, l, _ = k.shape
+
+        # Concatenate previous memory and new kv tokens
+        combined_k = torch.cat([prev_mem, k], dim=2)  # [B, h, L+l, d]
+        combined_v = torch.cat([prev_mem, v], dim=2)  # [B, h, L+l, d]
+
+        # Multi-head attention
+        q = self.to_q(prev_mem)      # [B, h, L, d]
+        k = self.to_k(combined_k)    # [B, h, L+l, d] 
+        v = self.to_v(combined_v)    # [B, h, L+l, d]
+
+        # Use scaled_dot_product_attention
+        out = F.scaled_dot_product_attention(q, k, v)  # [B, h, L, d]
+        
+        out = self.to_out(out)
+        out = self.norm(out)
+
+        return out
 
 class NeuralMemory(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, mem_dim: int, hidden_dim: int, stride: int):
@@ -74,12 +104,15 @@ class NeuralMemory(nn.Module):
         self.stride = stride
         self.temporal_rotary_emb = RotaryEmbedding(dim=input_dim)
         self.residual_mem_update = False
+        self.mem_len = 4*stride
 
-        self.update_net = nn.Sequential(
-            nn.Linear(2 * input_dim + mem_dim, hidden_dim),
-            nn.GELU(),
-            nn.Linear(hidden_dim, mem_dim)
-        )
+        # self.update_net = nn.Sequential(
+        #     nn.Linear(2 * input_dim + mem_dim, hidden_dim),
+        #     nn.GELU(),
+        #     nn.Linear(hidden_dim, mem_dim)
+        # )
+
+        self.update_net = MemoryUpdater(input_dim, mem_dim)
 
         # Memory retrieval network (e.g., dot-product attention)
         self.retrieve_key_proj = nn.Linear(mem_dim, input_dim)
@@ -90,12 +123,19 @@ class NeuralMemory(nn.Module):
         B, H, N, D = k.shape
         k = k[:, :, :self.stride]
         v = v[:, :, :self.stride]
-        prev_mem = prev_mem if prev_mem is not None else torch.zeros(B, H, self.stride, self.mem_dim, device=k.device)
-        kvm = torch.cat([k, v, prev_mem], dim=-1)  # if memory length not equal to k or v, needs to use attention with prev_mem as q
+        prev_mem = prev_mem if prev_mem is not None else torch.zeros(B, H, self.mem_len, self.mem_dim, device=k.device)
+        # kvm = torch.cat([k, v, prev_mem], dim=-1)  # if memory length not equal to k or v, needs to use attention with prev_mem as q
+        # new_mem = self.update_net(kvm)
+        # print('prev_mem: ', prev_mem.shape, 'k: ', k.shape, 'v: ', v.shape)
+        new_mem = self.update_net(prev_mem, k, v)
+
+        # TODO: optional residual connection or gate connection
+        # gate = torch.sigmoid(self.gate_proj(torch.cat([prev_mem, new_mem], dim=-1)))
+        # new_mem = gate * new_mem + (1 - gate) * prev_mem
+
         if self.residual_mem_update:
-            new_mem = self.update_net(kvm) + prev_mem  # add residual connection from previous memory
-        else:
-            new_mem = self.update_net(kvm)
+            new_mem += prev_mem  # add residual connection from previous memory
+            
         return new_mem
 
     def forward_retrieve(self, q, mem=None):
