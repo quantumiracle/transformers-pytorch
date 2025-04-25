@@ -61,6 +61,32 @@ model = NeuromemTransformer(
 model.load_state_dict(state_dict)
 model.eval()
 
+# Calculate perplexity from loss
+def calculate_perplexity(loss):
+    return torch.exp(loss).item()
+
+def compute_perplexity(tokens):
+    """Compute perplexity on a given token sequence"""
+    with torch.no_grad():
+        # Convert to tensor if needed
+        if not isinstance(tokens, torch.Tensor):
+            tokens = torch.tensor(tokens, dtype=torch.long)
+        
+        # Ensure tensors are properly shaped
+        if len(tokens.shape) == 1:
+            tokens = tokens.unsqueeze(0)
+        
+        tokens = tokens.to(device)
+        
+        # NeuromemTransformer handles the loss calculation internally
+        # It automatically creates the shifted targets from the input
+        loss = model(tokens, return_loss=True)
+        
+        # Calculate perplexity from loss
+        perplexity = calculate_perplexity(loss)
+        
+        return loss.item(), perplexity
+
 def get_random_prompt():
     """Load a random prompt from the validation dataset and return the prompt tensor and full data"""
     with gzip.open(args.data_path) as file:
@@ -106,6 +132,11 @@ def generate_text():
         )
     
     generated_text = decode_tokens(sample[0].tolist())
+    
+    # Calculate perplexity on ground truth if available
+    if ground_truth is not None and len(ground_truth) > 1:
+        loss, perplexity = compute_perplexity(ground_truth)
+        print(f"\nGround Truth Perplexity: {perplexity:.2f} (Loss: {loss:.4f})")
     
     if ground_truth is not None:
         ground_truth_text = decode_tokens(ground_truth.tolist())

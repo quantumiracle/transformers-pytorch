@@ -66,13 +66,14 @@ class GEGLU(Module):
         return F.silu(gate) * x
     
 class MemoryUpdater(nn.Module):
-    def __init__(self, hidden_dim, mem_dim):
+    def __init__(self, input_dim, mem_dim):
         super().__init__()
-        self.to_q = nn.Linear(hidden_dim, mem_dim, bias=False)
-        self.to_k = nn.Linear(hidden_dim, mem_dim, bias=False)
-        self.to_v = nn.Linear(hidden_dim, mem_dim, bias=False)
+        self.to_q = nn.Linear(mem_dim, mem_dim, bias=False)
+        self.to_k = nn.Linear(input_dim, mem_dim, bias=False)
+        self.to_v = nn.Linear(input_dim, mem_dim, bias=False)
         self.to_out = nn.Linear(mem_dim, mem_dim)
         self.norm = nn.LayerNorm(mem_dim)
+        self.mem_update_rotary_emb = RotaryEmbedding(dim=mem_dim)
 
     def forward(self, prev_mem, k, v):
         # prev_mem: [B, h, L, d], k/v: [B, h, l, d]
@@ -83,10 +84,26 @@ class MemoryUpdater(nn.Module):
         combined_k = torch.cat([prev_mem, k], dim=2)  # [B, h, L+l, d]
         combined_v = torch.cat([prev_mem, v], dim=2)  # [B, h, L+l, d]
 
+        # simplified verison; no signficant difference in performance
+        # combined_k = k
+        # combined_v = v
+
         # Multi-head attention
         q = self.to_q(prev_mem)      # [B, h, L, d]
         k = self.to_k(combined_k)    # [B, h, L+l, d] 
         v = self.to_v(combined_v)    # [B, h, L+l, d]
+        # add rope
+        # q, k = self.mem_update_rotary_emb.rotate_queries_with_cached_keys(q, k) # does not work since q may be longer than k
+        q = self.mem_update_rotary_emb.rotate_queries_or_keys(q)
+        # k = self.mem_update_rotary_emb.rotate_queries_or_keys(k)
+
+        # separate memory and current parts for rope
+        k_mem, k_x = k[:, :, :L], k[:, :, L:]
+        # Apply rope separately to memory and current parts
+        k_mem = self.mem_update_rotary_emb.rotate_queries_or_keys(k_mem)
+        k_x = self.mem_update_rotary_emb.rotate_queries_or_keys(k_x)
+        # Recombine q parts
+        k = torch.cat([k_mem, k_x], dim=2)
 
         # Use scaled_dot_product_attention
         out = F.scaled_dot_product_attention(q, k, v)  # [B, h, L, d]
@@ -96,13 +113,14 @@ class MemoryUpdater(nn.Module):
 
         return out
 
+
 class NeuralMemory(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, mem_dim: int, hidden_dim: int, stride: int):
         super().__init__()
         self.mem_dim = mem_dim
         self.output_dim = output_dim
         self.stride = stride
-        self.temporal_rotary_emb = RotaryEmbedding(dim=input_dim)
+        self.mem_rotary_emb = RotaryEmbedding(dim=input_dim)
         self.residual_mem_update = False
         self.mem_len = 4*stride
 
@@ -119,8 +137,16 @@ class NeuralMemory(nn.Module):
         self.retrieve_val_proj = nn.Linear(mem_dim, input_dim)
         self.proj_to_token_dim = nn.Linear(input_dim, output_dim)
 
+        self.gate_proj = nn.Sequential(
+            nn.Linear(2 * mem_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+            nn.Sigmoid()
+        )
+
     def forward_update(self, k, v, prev_mem=None):
         B, H, N, D = k.shape
+        # only use stride length to avoid later segment leaked to memory during training
         k = k[:, :, :self.stride]
         v = v[:, :, :self.stride]
         prev_mem = prev_mem if prev_mem is not None else torch.zeros(B, H, self.mem_len, self.mem_dim, device=k.device)
@@ -130,8 +156,8 @@ class NeuralMemory(nn.Module):
         new_mem = self.update_net(prev_mem, k, v)
 
         # TODO: optional residual connection or gate connection
-        # gate = torch.sigmoid(self.gate_proj(torch.cat([prev_mem, new_mem], dim=-1)))
-        # new_mem = gate * new_mem + (1 - gate) * prev_mem
+        gate = torch.sigmoid(self.gate_proj(torch.cat([prev_mem, new_mem], dim=-1)))
+        new_mem = gate * new_mem + (1 - gate) * prev_mem
 
         if self.residual_mem_update:
             new_mem += prev_mem  # add residual connection from previous memory
@@ -147,6 +173,9 @@ class NeuralMemory(nn.Module):
         
         k_mem = self.retrieve_key_proj(mem)
         v_mem = self.retrieve_val_proj(mem)
+        # add rope
+        assert q.shape[2] <= k_mem.shape[2], "query length must be less than or equal to key length of memory"
+        q, k_mem = self.mem_rotary_emb.rotate_queries_with_cached_keys(q, k_mem)
         x_mem = F.scaled_dot_product_attention(query=q, key=k_mem, value=v_mem) # d = dim_head
         x_mem = self.proj_to_token_dim(x_mem) # d = token dimension (dim)
         return x_mem
@@ -213,7 +242,20 @@ class Attention(nn.Module):
         # k is cached with memory, so its longer than q
         # this funcion auto scales q and k due to different lengths
         # additionally applies 
-        q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)  # this one leaks info? 
+
+
+        ## a better rope to make it aware that first part of q is memory, second half is x
+        # Split q into memory and current parts
+        q_mem, q_x = q[:, :, :x_mem.shape[1]], q[:, :, x_mem.shape[1]:]
+        # Apply rope separately to memory and current parts
+        q_mem = self.rotary_emb.rotate_queries_or_keys(q_mem)
+        q_x = self.rotary_emb.rotate_queries_or_keys(q_x)
+        # Recombine q parts
+        q = torch.cat([q_mem, q_x], dim=2)
+        # Apply rope to k
+        k = self.rotary_emb.rotate_queries_or_keys(k)
+
+        # q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)
 
         # causal mask
         if self.is_causal:
@@ -267,12 +309,12 @@ class NeuromemTransformer(Module):
         heads, 
         dim_head, 
         mlp_dim,
+        segment_length = 32,
         dynamic_tanh = False,
         token_emb: Module | None = None,
         ):
         super().__init__()
-        self.segment_length = 32
-        assert num_tokens % self.segment_length == 0, f"num_tokens {num_tokens} better be divisible by segment_length {self.segment_length}"
+        self.segment_length = segment_length
         self.stride = self.segment_length // 2
         if dynamic_tanh:
             self.norm = DynamicTanh(dim)
