@@ -244,16 +244,16 @@ class Attention(nn.Module):
         # additionally applies 
 
 
-        ## a better rope to make it aware that first part of q is memory, second half is x
-        # Split q into memory and current parts
-        q_mem, q_x = q[:, :, :x_mem.shape[1]], q[:, :, x_mem.shape[1]:]
+        ## a better rope to make it aware that first part of k is memory, second half is x
+        # Split k into memory and current parts
+        k_mem, k_x = k[:, :, :x_mem.shape[1]], k[:, :, x_mem.shape[1]:]
         # Apply rope separately to memory and current parts
-        q_mem = self.rotary_emb.rotate_queries_or_keys(q_mem)
-        q_x = self.rotary_emb.rotate_queries_or_keys(q_x)
-        # Recombine q parts
-        q = torch.cat([q_mem, q_x], dim=2)
-        # Apply rope to k
-        k = self.rotary_emb.rotate_queries_or_keys(k)
+        k_mem = self.rotary_emb.rotate_queries_or_keys(k_mem)
+        k_x = self.rotary_emb.rotate_queries_or_keys(k_x)
+        # Recombine k parts
+        k = torch.cat([k_mem, k_x], dim=2)
+        # Apply rope to q
+        q = self.rotary_emb.rotate_queries_or_keys(q)
 
         # q, k = self.rotary_emb.rotate_queries_with_cached_keys(q, k)
 
