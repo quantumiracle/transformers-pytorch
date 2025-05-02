@@ -65,7 +65,7 @@ def decode_tokens(tokens):
 # initialize transformer
 model = SkipTransformer(
     num_tokens = 256,
-    N = 1,  # skip size
+    N = 3,  # skip size
     dim = 384,
     depth = 8,
     heads = 8,

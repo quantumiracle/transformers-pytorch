@@ -29,6 +29,14 @@
 #   an existing `Transformer` core with (attn, ff) layers that accept an
 #   explicit Boolean attention mask of shape (seq, seq)
 #
+# Conclusion: 
+# 1. The sampled logits are independent for each token, so it's modeling marginal probabilities, not joint probabilities.
+# 2. Since it's the marginal probabilities, at inference the N tokens are sampled independently (not knowing its previous tokens), so the output is not a valid sequence.
+# 3. N=1 back to standard next-token prediction. 
+# 4. Actually the train/val loss for N-token prediction is much smaller than next-token prediction (guess due to better context and mutual dependencies for predicted logits), but the inference performance is much worse. This means better logits does not imply better output tokens, it also depends on the inference manner (causal dependency or independent sampling).
+# 5. To model joint probabilities for next N tokens, it needs one logits in a larger space M^N (M is the vocab size), separate logits just indicate marginal probabilities therefore lose the dependencies, although in transformer blocks these logits mutually share input information. The N-token logits are dependent but N tokens are sampled independently.
+# 6. If the logits are joint probabilities, it is essentially the same as using a larger codebook with M^N vocab size.
+# 7. Diffusion model directly output the values (token) but not logits, so it can model joint probabilities.
 # ---------------------------------------------------------------------
 
 from __future__ import annotations
