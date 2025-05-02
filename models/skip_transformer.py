@@ -1,23 +1,33 @@
 # skip_transformer.py
 #
 # A “next‑N‑token” hybrid Transformer that:
-#  • reads an input sequence  x₁…x_{L‑N}
-#  • predicts the block        x_{L‑N+1}…x_L   (length N + overlap)
+#  • reads an input sequence of length L=l-n:  x₁…x_{l‑N}
+#  • outputs sequence of length L=l-n:  x_{N+1}…x_l   (length N + overlap)
 #  • keeps causal masking only where needed (overlap zone)
 #  • lets the N brand‑new tokens attend to each other freely
 #
-# Segment layout if   L = total length   and   N = skip size
+# Segment layout if   l = total length   and   N = skip size, attention matrix  LxL, L=l-n
 #
 #   ┌───────────────┬─────────────┬────────────┐
 #   │ early context │  overlap    │  new block │
-#   │   length N    │ L–2N tokens │  length N  │
+#   │   length N    │ l–2N tokens │  length N  │
 #   └───────────────┴─────────────┴────────────┘
-#
+# Example: l = 10, N = 3, L=l-n=7
+# input sequence:  x1, x2, x3, x4, x5, x6, x7
+# output sequence: x4, x5, x6, x7, x8, x9, x10
+# attention mask:
+#    x1, x2, x3, x4, x5, x6, x7
+# x4, 0,  0,  0,  0,  1,  1,  1
+# x5, 0,  0,  0,  0,  0,  1,  1
+# x6, 0,  0,  0,  0,  0,  0,  1
+# x7, 0,  0,  0,  0,  0,  0,  0
+# x8, 0,  0,  0,  0,  0,  0,  0
+# x9, 0,  0,  0,  0,  0,  0,  0
+# x10,0,  0,  0,  0,  0,  0,  0
 # Requirements:
 #   einops, torch
 #   an existing `Transformer` core with (attn, ff) layers that accept an
-#   explicit Boolean attention mask of shape (seq, seq) or
-#   (1, 1, seq, seq) (convert below).
+#   explicit Boolean attention mask of shape (seq, seq)
 #
 # ---------------------------------------------------------------------
 
@@ -47,13 +57,13 @@ def build_hybrid_mask(N: int, L: int, *, device=None) -> torch.BoolTensor:
         device : torch device
 
     Returns:
-        Bool tensor of shape (L, L) where True =  masked‑out, False = attend
+        Bool tensor of shape (L, L) where True = masked‑out, False = attend
     """
     mask = torch.zeros((L, L), dtype=torch.bool, device=device)
 
     # causal mask
     for i in range(L-N):
-        mask[i, -(L-N-i):] = True
+        mask[i, N+i:] = True
 
     return mask
 # ---------------------------------------------------------------------
@@ -231,6 +241,7 @@ class SkipTransformer(Module):
                     sample = filter_fn(logits[:, i], **filter_kwargs)
                     sample = gumbel_sample(sample, temperature = temperature)
                     new_tokens.append(sample)
+                    # out = torch.cat((out, sample), dim = -1)
                 new_tokens = torch.cat(new_tokens, dim = 1)
                 out = torch.cat((out, new_tokens), dim = 1)
                 pbar.update(1)

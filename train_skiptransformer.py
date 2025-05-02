@@ -65,7 +65,7 @@ def decode_tokens(tokens):
 # initialize transformer
 model = SkipTransformer(
     num_tokens = 256,
-    N = 3,  # skip size
+    N = 1,  # skip size
     dim = 384,
     depth = 8,
     heads = 8,
@@ -114,13 +114,13 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval = 10., desc = 'training'):
         loss = model(next(train_loader), return_loss = True)
         loss.backward()
 
-    # print(f'training loss: {loss.item()}')
     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
     optim.step()
     optim.zero_grad()
     wandb.log(dict(loss = loss.item()), step = i)
     
     if i % VALIDATE_EVERY == 0:
+        print(f'training loss: {loss.item()}')
         model.eval()
         with torch.no_grad():
             loss = model(next(val_loader), return_loss = True)
