@@ -209,7 +209,6 @@ class Transformer(Module):
 
                 logits = filter_fn(logits, **filter_kwargs)
                 sample = gumbel_sample(logits, temperature = temperature)
-
                 out = torch.cat((out, sample), dim = -1)
                 pbar.update(1)
 

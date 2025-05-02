@@ -11,8 +11,8 @@ from torch.utils.data import DataLoader, Dataset
 from torch.optim import Adam
 from adam_atan2_pytorch import AdoptAtan2
 
-from models.transformer import (
-    Transformer,
+from models.skip_transformer import (
+    SkipTransformer,
 )
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
@@ -30,14 +30,14 @@ GENERATE_EVERY  = 500
 PRIME_LENGTH = 100
 GENERATE_LENGTH = 512
 SHOULD_GENERATE = True
-USE_FAST_INFERENCE = True
+USE_FAST_INFERENCE = False
 SEQ_LEN = 512
-DYNAMIC_TANH = True
+DYNAMIC_TANH = False
 
 # experiment related
 
 PROJECT_NAME = 'transformer'
-RUN_NAME = f'vanilla_transformer'
+RUN_NAME = f'skiptransformer'
 WANDB_ONLINE = True # turn this on to pipe experiment to cloud
 
 # wandb experiment tracker
@@ -63,8 +63,9 @@ def decode_tokens(tokens):
 
 
 # initialize transformer
-model = Transformer(
+model = SkipTransformer(
     num_tokens = 256,
+    N = 3,  # skip size
     dim = 384,
     depth = 8,
     heads = 8,
@@ -138,5 +139,6 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval = 10., desc = 'training'):
         # also print ground truth
         print('output_str: ', output_str)
         print('ground_truth: ', decode_tokens(val_dataset[random_index][PRIME_LENGTH:GENERATE_LENGTH]))
+
 model_save_path = os.path.join(SAVE_DIR, SAVE_FILENAME)
 torch.save(model.state_dict(), model_save_path) 

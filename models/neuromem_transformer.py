@@ -98,9 +98,10 @@ class MemoryUpdater(nn.Module):
         # k = self.mem_update_rotary_emb.rotate_queries_or_keys(k)
 
         # separate memory and current parts for rope
+        offset_mem = 10000
         k_mem, k_x = k[:, :, :L], k[:, :, L:]
         # Apply rope separately to memory and current parts
-        k_mem = self.mem_update_rotary_emb.rotate_queries_or_keys(k_mem)
+        k_mem = self.mem_update_rotary_emb.rotate_queries_or_keys(k_mem, offset=offset_mem)
         k_x = self.mem_update_rotary_emb.rotate_queries_or_keys(k_x)
         # Recombine q parts
         k = torch.cat([k_mem, k_x], dim=2)
@@ -153,6 +154,7 @@ class NeuralMemory(nn.Module):
         # kvm = torch.cat([k, v, prev_mem], dim=-1)  # if memory length not equal to k or v, needs to use attention with prev_mem as q
         # new_mem = self.update_net(kvm)
         # print('prev_mem: ', prev_mem.shape, 'k: ', k.shape, 'v: ', v.shape)
+        prev_mem = prev_mem.detach()
         new_mem = self.update_net(prev_mem, k, v)
 
         # TODO: optional residual connection or gate connection
@@ -175,7 +177,10 @@ class NeuralMemory(nn.Module):
         v_mem = self.retrieve_val_proj(mem)
         # add rope
         assert q.shape[2] <= k_mem.shape[2], "query length must be less than or equal to key length of memory"
-        q, k_mem = self.mem_rotary_emb.rotate_queries_with_cached_keys(q, k_mem)
+        # q, k_mem = self.mem_rotary_emb.rotate_queries_with_cached_keys(q, k_mem)
+        offset_mem = 10000
+        q = self.mem_rotary_emb.rotate_queries_or_keys(q)
+        k_mem = self.mem_rotary_emb.rotate_queries_or_keys(k_mem, offset=offset_mem)
         x_mem = F.scaled_dot_product_attention(query=q, key=k_mem, value=v_mem) # d = dim_head
         x_mem = self.proj_to_token_dim(x_mem) # d = token dimension (dim)
         return x_mem
@@ -246,9 +251,10 @@ class Attention(nn.Module):
 
         ## a better rope to make it aware that first part of k is memory, second half is x
         # Split k into memory and current parts
+        offset_mem = 10000
         k_mem, k_x = k[:, :, :x_mem.shape[1]], k[:, :, x_mem.shape[1]:]
         # Apply rope separately to memory and current parts
-        k_mem = self.rotary_emb.rotate_queries_or_keys(k_mem)
+        k_mem = self.rotary_emb.rotate_queries_or_keys(k_mem, offset=offset_mem)
         k_x = self.rotary_emb.rotate_queries_or_keys(k_x)
         # Recombine k parts
         k = torch.cat([k_mem, k_x], dim=2)
