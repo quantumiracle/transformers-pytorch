@@ -70,4 +70,4 @@ python train_unet.py
 ```
 
 ## Result Analysis
-[See doc](https://docs.google.com/document/d/1orGvXJ3iO-yDa6Szqt3DEdthMRKloXFkyRdi3fPn630/edit?usp=sharing)
+[See doc](https://docs.google.com/document/d/1orGvXJ3iO-yDa6Szqt3DEdthMRKloXFkyRdi3fPn630/edit?usp=sharing) and [Blog](https://quantumiracle.github.io/webpage/blogs/blog20250415.html) 
